@@ -1,4 +1,4 @@
-# 股票数据采集与量化分析系统（升级版）
+# 股票数据采集与量化分析系统
 
 端到端数据工程 Pipeline：每日自动采集上证指数 + 多源新闻 → SQLite 增量存储 → Streamlit 可视化分析
 
@@ -75,7 +75,6 @@ docker run -p 8501:8501 stock-quant
 ## 目录结构
 
 ```
-升级版/
 ├── .github/workflows/
 │   └── daily-stock-pipeline.yml   # GitHub Actions 每日定时任务
 ├── crawler/
@@ -109,12 +108,3 @@ docker run -p 8501:8501 stock-quant
 - **部署**：Docker
 - **日志与 CLI**：loguru, Typer, Rich
 
----
-
-## 注意
-
-原版代码完整保留在 `../大二原版/`，本目录仅做增量工程化升级。
-
----
-
-*本项目为华东理工大学数学与应用数学专业「贯通实践」课程升级作品。*
