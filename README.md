@@ -5,7 +5,7 @@
 **Key Results**
 - 设计并实现端到端数据采集 Pipeline，支持上证指数与多源新闻的增量抓取与 SQLite 持久化
 - 构建可测试的模块化爬虫系统，采用 requests + mock 测试，显著提升采集稳定性与可维护性
-- 部署 Streamlit 可视化看板，实现参数化 RSI 分析与数据实时预览
+- 部署 Streamlit 可视化看板，实现参数化 RSI 分析与 **RSI 超买超卖策略回测**（对比买入持有基准收益）
 - 项目成果：**每日自动 Pipeline（GitHub Actions cron）** + 增量 SQLite 更新 | pytest 模拟测试 100% 覆盖 | Docker 一键部署 | [代码开源](https://github.com/dooorr/stock-quant-analysis)
 
 ---
@@ -64,7 +64,13 @@ docker run -p 8501:8501 stock-quant
 - 支持 `stock` / `news` / `all` 三种模式
 - 支持 `--output-dir` 自定义输出目录
 
-### 5. 每日自动定时任务（CI/CD）
+### 5. RSI 策略回测模块
+- `src/analysis/rsi_backtest.py`：pandas 实现 RSI 计算与超买超卖策略回测
+- 规则：RSI < 30 建仓、RSI > 70 平仓，T+1 计入收益，输出策略 vs 买入持有累计收益与最大回撤
+- Streamlit 看板集成参数调节与收益曲线对比图
+- `tests/test_rsi_backtest.py` 单元测试覆盖
+
+### 6. 每日自动定时任务（CI/CD）
 - **GitHub Actions**：`.github/workflows/daily-stock-pipeline.yml` 每天 UTC 16:00（北京时间 00:00）自动执行 `pipeline.py --stock-only`
 - **本地入口**：`scripts/daily_run.py` 便于 Windows 任务计划程序 / Linux cron 调用
 - 采集结果自动上传为 GitHub Artifact（保留 30 天）
@@ -86,11 +92,14 @@ docker run -p 8501:8501 stock-quant
 ├── scripts/
 │   └── daily_run.py               # 本地每日任务入口（支持 cron / 任务计划程序）
 ├── src/
+│   ├── analysis/
+│   │   └── rsi_backtest.py        # RSI 策略回测
 │   ├── cli.py                     # Typer 命令行入口
 │   └── data/
 │       └── storage.py             # SQLite 增量存储
 ├── tests/
-│   └── test_crawlers.py           # pytest 单元测试
+│   ├── test_crawlers.py           # 爬虫 pytest
+│   └── test_rsi_backtest.py       # 回测 pytest
 ├── pipeline.py                    # 完整数据流程
 ├── Dockerfile
 ├── requirements.txt
