@@ -1,118 +1,110 @@
 # 股票数据采集与量化分析系统（升级版）
 
-> 本文件夹为「大二原版」的升级版本，保留原版核心逻辑，在此基础上进行工程化改进。
+端到端数据工程 Pipeline：每日自动采集上证指数 + 多源新闻 → SQLite 增量存储 → Streamlit 可视化分析
 
-**工程化成果（已体现在简历中）**
-- 设计并实现端到端数据采集 Pipeline，支持上证指数与多源新闻增量抓取 + SQLite 持久化
-- 构建可测试模块化爬虫系统（requests + mock），显著提升采集稳定性与可维护性
+**Key Results**
+- 设计并实现端到端数据采集 Pipeline，支持上证指数与多源新闻的增量抓取与 SQLite 持久化
+- 构建可测试的模块化爬虫系统，采用 requests + mock 测试，显著提升采集稳定性与可维护性
 - 部署 Streamlit 可视化看板，实现参数化 RSI 分析与数据实时预览
-- 项目成果：每日自动 Pipeline + 增量 SQLite 更新 | pytest 模拟测试 100% 覆盖 | Docker 一键部署
+- 项目成果：每日自动 Pipeline + 增量 SQLite 更新 | pytest 模拟测试 100% 覆盖 | Docker 一键部署 | [代码开源](https://github.com/dooorr/stock-quant-analysis)
 
 ---
 
-## 已完成的升级
+## 系统架构
 
-### 优先级 1：股票行情采集（已完成）
-- 使用 `requests` + `pandas.read_html` 替代 Selenium
-- 增加重试机制和异常处理
-- 文件：`crawler/shanghai_index.py`
+```mermaid
+flowchart TD
+    A[数据采集层] -->|requests + BS4| B[上证指数爬虫]
+    A -->|Selenium + 站点配置| C[新闻爬虫]
+    B & C --> D[Pipeline 调度器]
+    D -->|增量 upsert| E[(SQLite 持久化)]
+    D -->|CSV 备份| F[(data/ 目录)]
+    E --> G[Streamlit Dashboard]
+    G -->|RSI / 趋势分析| H[可视化 & 导出]
+```
 
-## 已完成的升级
+---
 
-### 优先级 1：股票行情采集（已完成）
-- 使用 `requests` + `pandas.read_html` 替代 Selenium
-- 增加重试机制和异常处理
-- 文件：`crawler/shanghai_index.py`
+## 快速开始
 
-### 优先级 2：新闻数据挖掘（已完成）
-- 新建 `crawler/news_crawler.py`
-- 封装为 `NewsCrawler` 类，支持多站点配置
-- 增加登录状态管理、日志、异常处理
-- 提供 `sites.json` 配置文件示例
+```bash
+# 安装依赖
+pip install -r requirements.txt
 
-### 优先级 3：界面升级（已完成）
-- 新建 `gui/` 目录
-- **Streamlit 版本**（推荐）：`gui/streamlit_app.py`
-- **Tkinter 版本**（兼容）：`gui/tk_app.py`
+# 运行完整 Pipeline
+python pipeline.py --all
 
-### 完整流程串联（已完成）
-- 新建 `pipeline.py`：一键运行「股票采集 → 新闻采集 → 数据保存」
-- 增强 `src/cli.py`：提供 `pipeline` 和 `gui` 命令
-- 支持 `--stock-only` / `--news-only` / `--all` 三种模式
+# 启动 Streamlit 可视化界面
+streamlit run gui/streamlit_app.py
+
+# 使用 CLI
+python -m src.cli pipeline stock --output-dir data
+python -m src.cli gui streamlit
+```
+
+---
+
+## 已完成的工程化特性
+
+### 1. SQLite 增量存储层
+- `src/data/storage.py`：基于日期主键的 `INSERT OR REPLACE` 增量 upsert
+- Pipeline 自动同时写入 CSV + SQLite
+
+### 2. 可测试的爬虫模块
+- `tests/test_crawlers.py`：使用 `unittest.mock` 覆盖成功/异常/重试路径
+- 关键路径 100% 可模拟测试，无需真实网络
+
+### 3. Docker 一键部署
+```bash
+docker build -t stock-quant .
+docker run -p 8501:8501 stock-quant
+```
+
+### 4. CLI 与 Pipeline 打通
+- 支持 `stock` / `news` / `all` 三种模式
+- 支持 `--output-dir` 自定义输出目录
+
+---
 
 ## 目录结构
 
 ```
 升级版/
 ├── crawler/
-│   ├── shanghai_index.py
-│   └── news_crawler.py
+│   ├── shanghai_index.py          # 上证指数采集（requests 优先）
+│   └── news_crawler.py            # 多站点新闻爬虫
 ├── gui/
-│   ├── streamlit_app.py
-│   └── tk_app.py
+│   ├── streamlit_app.py           # 推荐：现代 Web 界面
+│   └── tk_app.py                  # 兼容：传统桌面界面
 ├── src/
-│   └── cli.py                 # 统一命令行入口
-├── pipeline.py                # 完整数据流程
-├── 股票数据分析与可视化.ipynb
-├── 新闻数据挖掘.ipynb
-├── stock_data.csv
-├── cleaned_stock_data.csv
-├── sites.json
+│   ├── cli.py                     # Typer 命令行入口
+│   └── data/
+│       └── storage.py             # SQLite 增量存储
+├── tests/
+│   └── test_crawlers.py           # pytest 单元测试
+├── pipeline.py                    # 完整数据流程
+├── Dockerfile
+├── requirements.txt
 └── README.md
 ```
 
-## 一键运行完整流程
+---
 
-### 方式 1：使用 pipeline.py（推荐）
-```bash
-# 采集股票 + 新闻
-python pipeline.py --all
+## 技术栈
 
-# 仅采集股票
-python pipeline.py --stock-only
-
-# 仅采集新闻
-python pipeline.py --news-only
-```
-
-### 方式 2：使用 CLI
-```bash
-# 查看帮助
-python -m src.cli --help
-
-# 运行完整流程
-python -m src.cli pipeline all
-
-# 启动 Streamlit 界面
-python -m src.cli gui streamlit
-```
-
-### 方式 3：直接启动界面
-```bash
-# Streamlit（现代 Web 界面）
-streamlit run gui/streamlit_app.py
-
-# Tkinter（传统桌面界面）
-py -3 gui/tk_app.py
-```
+- **数据采集**：requests, BeautifulSoup4, Selenium
+- **数据存储**：SQLite, pandas
+- **测试**：pytest + unittest.mock
+- **可视化**：Streamlit, Matplotlib
+- **部署**：Docker
+- **日志与 CLI**：loguru, Typer, Rich
 
 ---
 
----
+## 注意
 
-## 界面截图（建议补充）
-
-> 运行后请手动截图并替换下方占位图（推荐 2-3 张）
-
-| Streamlit Dashboard（参数化 RSI 分析） | Pipeline 运行日志 |
-|---------------------------------------|------------------|
-| ![Streamlit](assets/screenshots/streamlit_dashboard.png) | ![Pipeline Log](assets/screenshots/pipeline_run.png) |
-
-**截图建议**：
-1. 启动 `streamlit run gui/streamlit_app.py`，调整 RSI 滑块后截图
-2. 运行 `python pipeline.py --stock-only` 后截取终端日志
-3. 可选：SQLite Studio 查看 `stock_data.db` 表结构
+原版代码完整保留在 `../大二原版/`，本目录仅做增量工程化升级。
 
 ---
 
-**注意**：原版代码完整保留在 `../大二原版/`，本目录仅做增量升级。
+*本项目为华东理工大学数学与应用数学专业「贯通实践」课程升级作品。*
