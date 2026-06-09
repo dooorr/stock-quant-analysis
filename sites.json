@@ -1,0 +1,18 @@
+{
+  "sina": {
+    "name": "新浪新闻",
+    "login_url": "https://passport.sina.com.cn/signin/login",
+    "list_url": "https://news.sina.com.cn/",
+    "item_selector": "a.news-item",
+    "title_attr": "text",
+    "url_attr": "href"
+  },
+  "163": {
+    "name": "网易新闻",
+    "login_url": "https://passport.163.com/login",
+    "list_url": "https://news.163.com/",
+    "item_selector": "a.news-item",
+    "title_attr": "text",
+    "url_attr": "href"
+  }
+}
