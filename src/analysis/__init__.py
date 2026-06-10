@@ -7,6 +7,15 @@ from .data_quality import (
     save_quality_report_json,
 )
 from .ma_backtest import MaCrossStrategy, compute_sma, run_ma_backtest
+from .news_sentiment import (
+    SentimentSummary,
+    analyze_news_records,
+    analyze_titles,
+    label_sentiment,
+    score_text,
+    sentiment_report_to_dict,
+    summarize_sentiment,
+)
 from .rsi_backtest import RsiStrategy, compute_rsi, run_rsi_backtest
 
 __all__ = [
@@ -25,4 +34,11 @@ __all__ = [
     "save_quality_report_json",
     "run_ma_backtest",
     "run_rsi_backtest",
+    "SentimentSummary",
+    "analyze_news_records",
+    "analyze_titles",
+    "label_sentiment",
+    "score_text",
+    "sentiment_report_to_dict",
+    "summarize_sentiment",
 ]

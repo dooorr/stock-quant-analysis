@@ -13,15 +13,23 @@
 
 import argparse
 from pathlib import Path
+
+import pandas as pd
 from loguru import logger
 
 from crawler.shanghai_index import fetch_shanghai_index
-from crawler.news_crawler import NewsCrawler
+from crawler.news_fetcher import fetch_stock_news
 from src.analysis.data_quality import (
     log_data_quality_report,
     run_data_quality_check,
     save_quality_report_json,
 )
+from src.analysis.news_sentiment import (
+    analyze_news_records,
+    sentiment_report_to_dict,
+    summarize_sentiment,
+)
+from src.data.news_storage import save_news_dataframe, save_sentiment_report_json
 from src.data.storage import load_stock_data, save_stock_data_incremental
 
 DB_FILENAME = "stock_data.db"
@@ -73,31 +81,41 @@ def run_stock_pipeline(output_dir: Path = Path("data"), *, history_limit: int = 
     return df
 
 
-def run_news_pipeline(sites: list[str] = None, output_dir: Path = Path("data")):
-    """新闻采集（可选）"""
+def run_news_pipeline(output_dir: Path = Path("data"), *, limit: int = 40):
+    """财经新闻抓取 + 标题情感分析 + SQLite/JSON 持久化（无需 Selenium）"""
     output_dir.mkdir(parents=True, exist_ok=True)
+    db_path = _db_path(output_dir)
 
-    crawler = NewsCrawler(headless=True)
-    crawler.login_all()
+    logger.info(f"开始采集财经新闻（目标 {limit} 条）...")
+    items = fetch_stock_news(limit=limit)
+    if not items:
+        logger.warning("未获取到新闻，跳过情感分析")
+        return pd.DataFrame()
 
-    all_items = []
-    for site in (sites or ["sina"]):
-        items = crawler.fetch_news(site, limit=30)
-        all_items.extend(items)
+    records = [item.__dict__ for item in items]
+    df_sent = analyze_news_records(records)
+    summary = summarize_sentiment(df_sent)
 
-    crawler.close()
+    logger.info(
+        f"情感摘要：共 {summary.total} 条 | 正面 {summary.positive} | "
+        f"中性 {summary.neutral} | 负面 {summary.negative} | 均分 {summary.avg_score:.3f}"
+    )
 
-    if all_items:
-        from crawler.news_crawler import NewsItem
-        # 简单保存为 JSON
-        import json
-        data = [item.__dict__ for item in all_items]
-        json_path = output_dir / "news.json"
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        logger.success(f"新闻数据已保存到 {json_path}")
+    # JSON 备份（含情感列）
+    import json
 
-    return all_items
+    news_json = output_dir / "news_sentiment.json"
+    payload = {
+        "summary": sentiment_report_to_dict(summary),
+        "items": df_sent.to_dict(orient="records"),
+    }
+    news_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    logger.success(f"新闻情感结果已保存到 {news_json}")
+
+    save_news_dataframe(df_sent, db_path=db_path)
+    save_sentiment_report_json(sentiment_report_to_dict(summary), output_dir / "sentiment_report.json")
+
+    return df_sent
 
 
 def run_full_pipeline(

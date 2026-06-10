@@ -6,6 +6,7 @@
 - 数据质量监控（空值、缺口、异常跳变、OHLC 一致性）
 - 价格 + RSI 图表
 - RSI 超买超卖策略回测，对比买入持有基准收益
+- 财经新闻标题情感分析（金融词典规则打分）
 """
 
 from __future__ import annotations
@@ -24,7 +25,90 @@ if str(ROOT) not in sys.path:
 from src.analysis.data_quality import run_data_quality_check
 from src.analysis.ma_backtest import compute_sma, run_ma_backtest
 from src.analysis.rsi_backtest import compute_rsi, prepare_ohlc_df, run_rsi_backtest
+from src.analysis.news_sentiment import summarize_sentiment
+from src.data.news_storage import load_news_data
 from src.data.storage import DEFAULT_DB_PATH, load_stock_data
+
+
+def _load_news_sentiment() -> tuple[pd.DataFrame, str]:
+    """优先 SQLite news_items，其次 data/news_sentiment.json。"""
+    db_path = ROOT / DEFAULT_DB_PATH
+    df = load_news_data(db_path, limit=200)
+    if not df.empty:
+        return df, f"SQLite ({db_path.relative_to(ROOT)})"
+
+    json_path = ROOT / "data" / "news_sentiment.json"
+    if json_path.exists():
+        import json
+
+        payload = json.loads(json_path.read_text(encoding="utf-8"))
+        items = payload.get("items", [])
+        if items:
+            return pd.DataFrame(items), str(json_path.relative_to(ROOT))
+
+    return pd.DataFrame(), ""
+
+
+def _render_news_sentiment_tab() -> None:
+    st.subheader("📰 财经新闻情感分析")
+
+    df_news, news_source = _load_news_sentiment()
+    if df_news.empty:
+        st.info("暂无新闻数据。请运行：`python pipeline.py --news-only`")
+        st.code("python pipeline.py --news-only", language="bash")
+        return
+
+    st.caption(f"数据来源：{news_source}（标题级规则情感，非深度学习）")
+
+    summary = summarize_sentiment(df_news)
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("新闻条数", str(summary.total))
+    c2.metric("正面", str(summary.positive))
+    c3.metric("中性", str(summary.neutral))
+    c4.metric("负面", str(summary.negative))
+    c5.metric("平均情感分", f"{summary.avg_score:.3f}")
+
+    if summary.total:
+        pie_df = pd.DataFrame(
+            {
+                "情感": ["正面", "中性", "负面"],
+                "数量": [summary.positive, summary.neutral, summary.negative],
+            }
+        )
+        fig_pie, ax_pie = plt.subplots(figsize=(4, 4))
+        colors = ["#2A9D8F", "#8D99AE", "#E63946"]
+        ax_pie.pie(
+            pie_df["数量"],
+            labels=pie_df["情感"],
+            autopct="%1.0f%%",
+            colors=colors,
+            startangle=90,
+        )
+        ax_pie.set_title("情感分布")
+        st.pyplot(fig_pie)
+
+    st.markdown("#### 新闻列表（按抓取时间）")
+
+    def _color_label(val: str) -> str:
+        if val == "正面":
+            return "background-color: #d8f3dc"
+        if val == "负面":
+            return "background-color: #ffe5e5"
+        return "background-color: #f1f3f5"
+
+    show = df_news.copy()
+    for col in ("sentiment_score",):
+        if col in show.columns:
+            show[col] = show[col].map(lambda x: f"{float(x):.3f}" if pd.notna(x) else "")
+
+    display_cols = [c for c in ("title", "sentiment_label", "sentiment_score", "publish_time", "source", "url") if c in show.columns]
+    styled = show[display_cols].style.map(_color_label, subset=["sentiment_label"]) if "sentiment_label" in show.columns else show[display_cols]
+    st.dataframe(styled, use_container_width=True, hide_index=True)
+
+    st.caption(
+        "说明：基于财经正/负面词典对标题打分（-1~1），供舆情概览学习演示；"
+        "不构成投资建议。词典见 src/analysis/news_sentiment.py。"
+    )
 
 
 def _load_market_data() -> tuple[pd.DataFrame, str]:
@@ -296,10 +380,13 @@ ma_long = st.sidebar.slider("长期均线", 10, 60, 20)
 if ma_long <= ma_short:
     st.sidebar.warning("长期均线应大于短期均线")
 
-tab_quality, tab_analysis = st.tabs(["数据质量监控", "量化分析"])
+tab_quality, tab_analysis, tab_news = st.tabs(["数据质量监控", "量化分析", "新闻情感"])
 
 with tab_quality:
     _render_quality_tab(df_raw)
 
 with tab_analysis:
     _render_analysis_tab(df, rsi_period, oversold, overbought, ma_short, ma_long)
+
+with tab_news:
+    _render_news_sentiment_tab()

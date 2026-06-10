@@ -2,11 +2,12 @@
 
 [![GitHub](https://img.shields.io/badge/GitHub-dooorr%2Fstock--quant--analysis-blue?logo=github)](https://github.com/dooorr/stock-quant-analysis)
 
-端到端数据工程 Pipeline：多源采集上证指数日 K → SQLite 增量存储 → 数据质量门禁 → Streamlit 量化看板（RSI / MA 回测）
+端到端数据工程 Pipeline：多源采集上证指数日 K → SQLite 增量存储 → 数据质量门禁 → **财经新闻情感分析** → Streamlit 量化看板（RSI / MA 回测）
 
 **Key Results**
 - 多源行情爬虫（东方财富 / 新浪 / Investing 自动回退），单次可拉 **1000+ 条**日 K，替代原仅 ~20 条的页面抓取
 - Pipeline 入库后自动输出**数据质量报告**（空值、缺口、异常跳变、OHLC 一致性）至日志与 `quality_report.json`
+- **财经新闻抓取 + 标题情感分析**（金融正/负面词典规则打分），结果写入 SQLite 与 `news_sentiment.json`，Streamlit 可视化
 - 基于 `BaseStrategy` 实现 **RSI + MA 金叉死叉**策略回测，Streamlit 对比买入持有基准收益
 - **GitHub Actions 每日 cron** + pytest 全覆盖 + Docker 部署 | [代码开源](https://github.com/dooorr/stock-quant-analysis)
 
@@ -17,15 +18,17 @@
 ```mermaid
 flowchart TD
     A[多源爬虫] -->|东方财富 / 新浪 / Investing| B[上证指数日 K]
-    A -->|Selenium 可选| C[新闻爬虫]
+    N[新浪滚动 API] -->|requests JSON| C[新闻标题]
     B --> D[Pipeline]
     C --> D
     D -->|INSERT OR REPLACE| E[(SQLite)]
-    D -->|CSV 备份| F[(data/)]
+    D -->|CSV / JSON 备份| F[(data/)]
     D -->|质量门禁| G[quality_report.json]
+    D -->|情感打分| S[sentiment_report.json]
     E --> H[Streamlit Dashboard]
     H --> I[数据质量监控]
     H --> J[RSI / MA 回测]
+    H --> K[新闻情感]
 ```
 
 ---
@@ -39,7 +42,13 @@ pip install -r requirements.txt
 # 采集行情（新浪源国内较稳，单次最多约 1023 条）
 py pipeline.py --stock-only --history-limit 1023
 
-# 启动 Streamlit 看板
+# 仅采集财经新闻 + 情感分析（无需 Selenium）
+py pipeline.py --news-only
+
+# 行情 + 新闻 一次跑完（默认）
+py pipeline.py
+
+# 启动 Streamlit 看板（含「新闻情感」标签页）
 py -m streamlit run gui/streamlit_app.py
 # 或（PATH 已配置时）streamlit run gui/streamlit_app.py
 
@@ -74,12 +83,19 @@ py -m src.cli gui streamlit
 - RSI 超买超卖（`rsi_backtest.py`）、MA 金叉死叉（`ma_backtest.py`）
 - Streamlit 参数调节 + 策略 vs 买入持有收益曲线
 
-### 5. 测试与 CI/CD
-- pytest：`test_crawlers` / `test_data_quality` / `test_pipeline_quality` / `test_rsi_backtest` / `test_ma_backtest`
+### 5. 财经新闻情感分析
+- `crawler/news_fetcher.py`：新浪财经滚动新闻 API（`requests`，无需浏览器）
+- `src/analysis/news_sentiment.py`：金融正/负面词典对**标题**规则打分（-1～1），输出正面/中性/负面
+- 产出：`data/news_sentiment.json`（含摘要 + 列表）、`data/sentiment_report.json`、`SQLite news_items` 表
+- Streamlit「新闻情感」标签页：情感分布饼图 + 新闻列表着色
+- 说明：学习级 NLP 演示，非 BERT/深度学习；面试时如实表述为「词典 + 规则」
+
+### 6. 测试与 CI/CD
+- pytest：`test_crawlers` / `test_data_quality` / `test_pipeline_quality` / `test_rsi_backtest` / `test_ma_backtest` / **`test_news_sentiment`**
 - GitHub Actions 每日 UTC 16:00 执行 `pipeline.py --stock-only --history-limit 800`
 - `scripts/daily_run.py` 供本地定时任务
 
-### 6. 部署与 CLI
+### 7. 部署与 CLI
 - Docker：`docker build -t stock-quant . && docker run -p 8501:8501 stock-quant`
 - Typer CLI：`src/cli.py` 支持 fetch / pipeline / gui
 
@@ -91,16 +107,23 @@ py -m src.cli gui streamlit
 ├── .github/workflows/daily-stock-pipeline.yml
 ├── crawler/
 │   ├── shanghai_index.py          # 多源日 K 爬虫
-│   └── news_crawler.py
+│   ├── news_fetcher.py            # 新浪财经新闻 API（推荐）
+│   └── news_crawler.py            # Selenium 版（可选，需浏览器）
 ├── gui/
-│   ├── streamlit_app.py           # 质量监控 + 量化分析
+│   ├── streamlit_app.py           # 质量监控 + 量化分析 + 新闻情感
 │   └── tk_app.py
 ├── scripts/daily_run.py
 ├── src/
-│   ├── analysis/                  # 质量检测 + 回测策略
+│   ├── analysis/
+│   │   ├── news_sentiment.py      # 标题情感词典打分
+│   │   ├── data_quality.py
+│   │   └── ...                    # 回测策略
 │   ├── cli.py
-│   └── data/storage.py
+│   └── data/
+│       ├── storage.py             # 行情 SQLite
+│       └── news_storage.py        # 新闻 + 情感 SQLite
 ├── tests/
+│   └── test_news_sentiment.py
 ├── pipeline.py
 ├── Dockerfile
 ├── requirements.txt
@@ -111,10 +134,41 @@ py -m src.cli gui streamlit
 
 ## 技术栈
 
-- **数据采集**：requests, BeautifulSoup4, Selenium（新闻可选）
+- **数据采集**：requests, BeautifulSoup4, Selenium（新闻可选旧版）
+- **NLP（规则）**：财经情感词典标题打分（`news_sentiment.py`）
 - **存储与分析**：SQLite, pandas, numpy
 - **可视化**：Streamlit, Matplotlib
 - **工程**：loguru, Typer, pytest, Docker, GitHub Actions
+
+---
+
+## 推送到 GitHub
+
+在仓库根目录（`升级版/`）打开终端：
+
+```powershell
+cd "你的路径\贯通实践\升级版"
+
+git status
+git add .gitignore crawler/news_fetcher.py src/analysis/news_sentiment.py src/data/news_storage.py
+git add pipeline.py gui/streamlit_app.py tests/test_news_sentiment.py README.md
+git add src/analysis/__init__.py
+
+git commit -m "feat: add finance news sentiment analysis with Streamlit tab"
+git push origin main
+```
+
+推送后到 GitHub 仓库 → **Actions**，确认 `daily-stock-pipeline` 仍为绿勾（每日任务只跑行情，新闻需本地或手动 `--news-only`）。
+
+**本地验证新闻情感：**
+
+```powershell
+pip install -r requirements.txt
+py pipeline.py --news-only
+py -m streamlit run gui/streamlit_app.py
+```
+
+打开浏览器 → 切到 **「新闻情感」** 标签页，应能看到饼图和新闻列表。
 
 ---
 
