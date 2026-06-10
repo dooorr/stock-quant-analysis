@@ -5,7 +5,7 @@ import typer
 from rich import print as rprint
 from rich.table import Table
 
-app = typer.Typer(help="股票数据采集与量化分析系统（升级版）")
+app = typer.Typer(help="股票数据采集与量化分析系统")
 
 
 @app.command()
@@ -16,11 +16,14 @@ def version():
 
 
 @app.command()
-def fetch(source: str = typer.Argument("stock", help="数据源: stock / news")):
+def fetch(
+    source: str = typer.Argument("stock", help="数据源: stock / news"),
+    history_limit: int = typer.Option(3000, "--history-limit", "-n", help="股票日 K 条数上限"),
+):
     """采集数据"""
     if source == "stock":
-        from crawler.shanghai_index import fetch_shanghai_index_requests
-        df = fetch_shanghai_index_requests()
+        from crawler.shanghai_index import fetch_shanghai_index
+        df = fetch_shanghai_index(lmt=history_limit)
         rprint(f"[green]成功采集 {len(df)} 条股票数据[/green]")
     elif source == "news":
         from crawler.news_crawler import NewsCrawler
@@ -36,6 +39,7 @@ def fetch(source: str = typer.Argument("stock", help="数据源: stock / news"))
 def pipeline(
     mode: str = typer.Argument("all", help="模式: all / stock / news"),
     output_dir: str = typer.Option("data", "--output-dir", help="输出目录"),
+    history_limit: int = typer.Option(3000, "--history-limit", "-n", help="股票日 K 条数上限"),
 ):
     """运行完整数据流程"""
     from pathlib import Path
@@ -43,11 +47,11 @@ def pipeline(
 
     out = Path(output_dir)
     if mode == "stock":
-        run_stock_pipeline(output_dir=out)
+        run_stock_pipeline(output_dir=out, history_limit=history_limit)
     elif mode == "news":
         run_news_pipeline(output_dir=out)
     else:
-        run_full_pipeline()
+        run_full_pipeline(history_limit=history_limit)
 
 
 @app.command()

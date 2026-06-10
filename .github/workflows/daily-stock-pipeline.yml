@@ -29,7 +29,7 @@ jobs:
         env:
           PYTHONPATH: .
         run: |
-          python pipeline.py --stock-only
+          python pipeline.py --stock-only --history-limit 800
 
       - name: Upload collected data as artifact
         uses: actions/upload-artifact@v4

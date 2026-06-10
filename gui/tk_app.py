@@ -1,5 +1,5 @@
 """
-股票数据可视化 - Tkinter 版本（精简升级版）
+股票数据可视化 - Tkinter 版本
 
 保留原版 Tkinter 风格，代码更清晰，方便对比。
 如需运行：py -3 gui/tk_app.py
@@ -16,7 +16,7 @@ from pathlib import Path
 class StockGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("股票数据分析（Tkinter 升级版）")
+        self.root.title("股票数据分析")
         self.root.geometry("1000x700")
 
         self.df = None

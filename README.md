@@ -31,8 +31,9 @@ flowchart TD
 # 安装依赖
 pip install -r requirements.txt
 
-# 运行完整 Pipeline
-python pipeline.py --all
+# 运行完整 Pipeline（默认拉取约 3000 条日 K）
+python pipeline.py --stock-only
+python pipeline.py --stock-only --history-limit 5000   # 最多约 10000
 
 # 启动 Streamlit 可视化界面
 streamlit run gui/streamlit_app.py
@@ -50,27 +51,41 @@ python -m src.cli gui streamlit
 - `src/data/storage.py`：基于日期主键的 `INSERT OR REPLACE` 增量 upsert
 - Pipeline 自动同时写入 CSV + SQLite
 
-### 2. 可测试的爬虫模块
+### 2. 多源历史行情爬虫
+- `crawler/shanghai_index.py` 统一入口 `fetch_shanghai_index(lmt=3000)`
+- **优先东方财富 JSON API**（最多约 10000 条）
+- 失败时回退 **新浪财经 API**（最多约 1023 条，国内网络通常更稳）
+- 再失败则用 **Investing.com AJAX 分页**，最后兜底首页 ~20 条
+- Pipeline / CLI 支持 `--history-limit N` 控制拉取条数
+
+### 3. 可测试的爬虫模块
 - `tests/test_crawlers.py`：使用 `unittest.mock` 覆盖成功/异常/重试路径
 - 关键路径 100% 可模拟测试，无需真实网络
 
-### 3. Docker 一键部署
+### 4. Docker 一键部署
 ```bash
 docker build -t stock-quant .
 docker run -p 8501:8501 stock-quant
 ```
 
-### 4. CLI 与 Pipeline 打通
+### 5. CLI 与 Pipeline 打通
 - 支持 `stock` / `news` / `all` 三种模式
 - 支持 `--output-dir` 自定义输出目录
 
-### 5. RSI 策略回测模块
-- `src/analysis/rsi_backtest.py`：pandas 实现 RSI 计算与超买超卖策略回测
-- 规则：RSI < 30 建仓、RSI > 70 平仓，T+1 计入收益，输出策略 vs 买入持有累计收益与最大回撤
-- Streamlit 看板集成参数调节与收益曲线对比图
-- `tests/test_rsi_backtest.py` 单元测试覆盖
+### 6. 数据质量监控
+- `src/analysis/data_quality.py`：空值率、重复日期、工作日缺口、价格异常跳变（阈值 + 3σ）、OHLC 一致性
+- **Pipeline 集成**：`pipeline.py` 在 SQLite 入库后自动跑质量检测，loguru 输出摘要日志，并写入 `data/quality_report.json`
+- Streamlit 看板「数据质量监控」标签页：健康评分、问题清单与明细表
+- `tests/test_data_quality.py`、`tests/test_pipeline_quality.py` 单元测试覆盖
 
-### 6. 每日自动定时任务（CI/CD）
+### 7. 可扩展策略回测框架
+- `src/analysis/backtest_base.py`：`BaseStrategy` 抽象 + 通用 T+1 回测引擎
+- `src/analysis/rsi_backtest.py`：RSI 超买超卖（< 30 建仓、> 70 平仓）
+- `src/analysis/ma_backtest.py`：双均线金叉死叉（短期 MA > 长期 MA 持仓）
+- Streamlit 看板同时展示 RSI / MA 收益曲线与基准对比
+- `tests/test_rsi_backtest.py`、`tests/test_ma_backtest.py` 单元测试覆盖
+
+### 8. 每日自动定时任务（CI/CD）
 - **GitHub Actions**：`.github/workflows/daily-stock-pipeline.yml` 每天 UTC 16:00（北京时间 00:00）自动执行 `pipeline.py --stock-only`
 - **本地入口**：`scripts/daily_run.py` 便于 Windows 任务计划程序 / Linux cron 调用
 - 采集结果自动上传为 GitHub Artifact（保留 30 天）
@@ -93,13 +108,18 @@ docker run -p 8501:8501 stock-quant
 │   └── daily_run.py               # 本地每日任务入口（支持 cron / 任务计划程序）
 ├── src/
 │   ├── analysis/
+│   │   ├── backtest_base.py       # BaseStrategy + 回测引擎
+│   │   ├── data_quality.py        # 数据质量检测
+│   │   ├── ma_backtest.py         # MA 金叉死叉策略
 │   │   └── rsi_backtest.py        # RSI 策略回测
 │   ├── cli.py                     # Typer 命令行入口
 │   └── data/
 │       └── storage.py             # SQLite 增量存储
 ├── tests/
 │   ├── test_crawlers.py           # 爬虫 pytest
-│   └── test_rsi_backtest.py       # 回测 pytest
+│   ├── test_data_quality.py       # 数据质量 pytest
+│   ├── test_ma_backtest.py        # MA 回测 pytest
+│   └── test_rsi_backtest.py       # RSI 回测 pytest
 ├── pipeline.py                    # 完整数据流程
 ├── Dockerfile
 ├── requirements.txt

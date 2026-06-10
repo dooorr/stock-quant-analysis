@@ -1,14 +1,13 @@
 """
-新闻数据挖掘 - 升级版
+新闻数据挖掘
 
-基于原版「新闻数据挖掘.ipynb」逻辑重构：
+基于 notebook 逻辑重构：
 - 支持多站点配置
 - 封装为 NewsCrawler 类
 - 增加登录状态管理、重试、日志
 - 支持增量抓取（记录已抓 URL）
 
-原版主要使用 Selenium 模拟登录 + 采集新闻标题/链接/时间。
-升级版保留 Selenium 方式，但代码更模块化、可维护。
+使用 Selenium 模拟登录 + 采集新闻标题/链接/时间，代码模块化、可维护。
 """
 
 from __future__ import annotations
@@ -38,7 +37,7 @@ class NewsItem:
 
 class NewsCrawler:
     """
-    新闻采集器（升级版）
+    新闻采集器
 
     用法示例：
         crawler = NewsCrawler(sites_config="sites.json")
