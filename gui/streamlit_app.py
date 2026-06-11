@@ -122,11 +122,15 @@ def _render_news_sentiment_tab() -> None:
     st.markdown("#### 新闻列表（按抓取时间）")
 
     def _color_label(val: str) -> str:
+        # 深色主题下 Streamlit 默认白字；浅色底必须显式指定深色字，否则「中性」看不见
+        text = "color: #1a1a1a; font-weight: 600;"
         if val == "正面":
-            return "background-color: #d8f3dc"
+            return f"{text} background-color: #b7e4c7;"
         if val == "负面":
-            return "background-color: #ffe5e5"
-        return "background-color: #f1f3f5"
+            return f"{text} background-color: #ffc9c9;"
+        if val == "中性":
+            return f"{text} background-color: #ced4da;"
+        return text
 
     show = df_news.copy()
     for col in ("sentiment_score",):
