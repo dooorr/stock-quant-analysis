@@ -91,9 +91,10 @@ py -m src.cli gui streamlit
 - 说明：学习级 NLP 演示，非 BERT/深度学习；面试时如实表述为「词典 + 规则」
 
 ### 6. 测试与 CI/CD
-- pytest：`test_crawlers` / `test_data_quality` / `test_pipeline_quality` / `test_rsi_backtest` / `test_ma_backtest` / **`test_news_sentiment`**
-- GitHub Actions 每日 UTC 16:00 执行 `pipeline.py --stock-only --history-limit 800`
-- `scripts/daily_run.py` 供本地定时任务
+- pytest：`test_crawlers` / `test_data_quality` / `test_pipeline_quality` / `test_rsi_backtest` / `test_ma_backtest` / **`test_news_sentiment`**（约 30+ 条，爬虫用 mock）
+- **Unit Tests**（`test.yml`）：每次 push 到 `main` 自动跑 pytest，不依赖外网
+- **Daily Stock Data Pipeline**（`daily-stock-pipeline.yml`）：每日 UTC 16:00 采集行情（`--source sina --history-limit 800`），产物上传 Artifact
+- `scripts/daily_run.py` 供本地 / Windows 任务计划
 
 ### 7. 部署与 CLI
 - Docker：`docker build -t stock-quant . && docker run -p 8501:8501 stock-quant`
@@ -105,6 +106,7 @@ py -m src.cli gui streamlit
 
 ```
 ├── .github/workflows/daily-stock-pipeline.yml
+├── .github/workflows/test.yml
 ├── crawler/
 │   ├── shanghai_index.py          # 多源日 K 爬虫
 │   ├── news_fetcher.py            # 新浪财经新闻 API（推荐）
@@ -142,23 +144,25 @@ py -m src.cli gui streamlit
 
 ---
 
-## 推送到 GitHub
+## GitHub 与 CI
 
-在仓库根目录（`升级版/`）打开终端：
+仓库：[github.com/dooorr/stock-quant-analysis](https://github.com/dooorr/stock-quant-analysis)
+
+推送代码后打开 **Actions** 页，确认：
+
+| Workflow | 触发方式 | 说明 |
+|----------|----------|------|
+| **Unit Tests** | 每次 push | pytest，应显示绿勾 |
+| **Daily Stock Data Pipeline** | 每天定时 / 手动 Run workflow | 只采行情；新闻需本地 `--news-only` |
+
+日常改代码后：
 
 ```powershell
 cd "你的路径\贯通实践\升级版"
-
-git status
-git add .gitignore crawler/news_fetcher.py src/analysis/news_sentiment.py src/data/news_storage.py
-git add pipeline.py gui/streamlit_app.py tests/test_news_sentiment.py README.md
-git add src/analysis/__init__.py
-
-git commit -m "feat: add finance news sentiment analysis with Streamlit tab"
+git add .
+git commit -m "你的说明"
 git push origin main
 ```
-
-推送后到 GitHub 仓库 → **Actions**，确认 `daily-stock-pipeline` 仍为绿勾（每日任务只跑行情，新闻需本地或手动 `--news-only`）。
 
 **本地验证新闻情感：**
 
