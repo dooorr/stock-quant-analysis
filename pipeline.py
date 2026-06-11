@@ -56,12 +56,17 @@ def run_stock_data_quality_gate(
     save_quality_report_json(report, output_dir / "quality_report.json")
 
 
-def run_stock_pipeline(output_dir: Path = Path("data"), *, history_limit: int = 3000):
+def run_stock_pipeline(
+    output_dir: Path = Path("data"),
+    *,
+    history_limit: int = 3000,
+    source: str = "auto",
+):
     """股票行情采集 + 保存"""
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"开始采集上证指数数据（目标 {history_limit} 条）...")
-    df = fetch_shanghai_index(lmt=history_limit)
+    logger.info(f"开始采集上证指数数据（目标 {history_limit} 条，源 {source}）...")
+    df = fetch_shanghai_index(lmt=history_limit, source=source)
 
     if df.empty:
         logger.error("股票数据采集失败")
@@ -122,12 +127,13 @@ def run_full_pipeline(
     stock_only: bool = False,
     news_only: bool = False,
     history_limit: int = 3000,
+    source: str = "auto",
 ):
     """一键运行完整流程"""
     logger.info("=== 开始完整数据流程 ===")
 
     if not news_only:
-        run_stock_pipeline(history_limit=history_limit)
+        run_stock_pipeline(history_limit=history_limit, source=source)
 
     if not stock_only:
         run_news_pipeline()
@@ -148,12 +154,18 @@ if __name__ == "__main__":
         metavar="N",
         help="上证指数历史日 K 条数上限（默认 3000，东方财富源最多约 10000）",
     )
+    parser.add_argument(
+        "--source",
+        default="auto",
+        choices=("auto", "eastmoney", "sina", "investing"),
+        help="行情数据源；CI/网络不稳时可指定 sina",
+    )
 
     args = parser.parse_args()
 
     if args.stock_only:
-        run_full_pipeline(stock_only=True, history_limit=args.history_limit)
+        run_full_pipeline(stock_only=True, history_limit=args.history_limit, source=args.source)
     elif args.news_only:
         run_full_pipeline(news_only=True)
     else:
-        run_full_pipeline(history_limit=args.history_limit)
+        run_full_pipeline(history_limit=args.history_limit, source=args.source)

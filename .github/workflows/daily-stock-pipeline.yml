@@ -3,9 +3,8 @@ name: Daily Stock Data Pipeline
 on:
   schedule:
     # 每天 UTC 16:00 执行（北京时间 00:00）
-    # 调整 cron 表达式可修改执行时间
     - cron: '0 16 * * *'
-  workflow_dispatch: # 允许手动触发
+  workflow_dispatch:
 
 jobs:
   run-pipeline:
@@ -29,11 +28,14 @@ jobs:
         env:
           PYTHONPATH: .
         run: |
-          python pipeline.py --stock-only --history-limit 800
+          mkdir -p data
+          python pipeline.py --stock-only --history-limit 800 --source sina
 
       - name: Upload collected data as artifact
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: stock-data-${{ github.run_number }}
           path: data/
           retention-days: 30
+          if-no-files-found: warn

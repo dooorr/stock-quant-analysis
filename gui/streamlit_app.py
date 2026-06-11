@@ -19,6 +19,37 @@ import pandas as pd
 import streamlit as st
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def _configure_matplotlib_zh() -> None:
+    """matplotlib 默认字体无中文，饼图标签/标题会显示为方框。"""
+    import platform
+
+    from matplotlib import font_manager
+
+    if platform.system() == "Windows":
+        candidates = ("Microsoft YaHei", "SimHei", "KaiTi")
+    elif platform.system() == "Darwin":
+        candidates = ("PingFang SC", "Heiti SC", "Arial Unicode MS")
+    else:
+        candidates = ("Noto Sans CJK SC", "WenQuanYi Micro Hei", "Noto Sans CJK JP")
+
+    installed = {f.name for f in font_manager.fontManager.ttflist}
+    for name in candidates:
+        if name in installed:
+            plt.rcParams["font.sans-serif"] = [name, "DejaVu Sans"]
+            plt.rcParams["axes.unicode_minus"] = False
+            return
+
+    for f in font_manager.fontManager.ttflist:
+        low = f.name.lower()
+        if any(k in low for k in ("yahei", "simhei", "noto sans cjk", "wenquanyi", "pingfang")):
+            plt.rcParams["font.sans-serif"] = [f.name, "DejaVu Sans"]
+            plt.rcParams["axes.unicode_minus"] = False
+            return
+
+
+_configure_matplotlib_zh()
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -86,6 +117,7 @@ def _render_news_sentiment_tab() -> None:
         )
         ax_pie.set_title("情感分布")
         st.pyplot(fig_pie)
+        plt.close(fig_pie)
 
     st.markdown("#### 新闻列表（按抓取时间）")
 

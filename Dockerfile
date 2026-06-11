@@ -6,6 +6,7 @@ WORKDIR /app
 # 安装系统依赖（playwright 可选）
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
 # 复制依赖并安装
